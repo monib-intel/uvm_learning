@@ -1,6 +1,102 @@
 # UVM Learning
 
-A comprehensive guide to learning and exploring the Universal Verification Methodology (UVM) for digital design verification using SystemVerilog.
+A comprehensive guide comparing **UVM (Universal Verification Methodology)** and **Formal Verification** techniques for digital design verification. This project uses the open-source **PicoRV32** RISC-V core as a target design to demonstrate both verification approaches side-by-side.
+
+## Project Goal
+
+The primary objective of this repository is to:
+1. **Compare UVM vs Formal Verification** - Understand the strengths and weaknesses of each approach
+2. **Hands-on Learning** - Apply both methodologies to a real RISC-V processor design
+3. **Best Practices** - Document when to use simulation-based vs. formal methods
+4. **Hybrid Verification** - Explore how UVM and formal can complement each other
+
+## Target Design: PicoRV32
+
+**[PicoRV32](https://github.com/YosysHQ/picorv32)** is a size-optimized RISC-V CPU core implementing the RV32IMC instruction set. It's an ideal learning target because:
+- Small and manageable (~2000 lines of Verilog)
+- Created by the Yosys team with formal verification in mind
+- Well-documented and actively maintained
+- Includes built-in formal verification examples
+
+---
+
+## Table of Contents
+
+### Part 1: UVM Design Fundamentals
+1. [What is UVM?](#what-is-uvm)
+2. [UVM Architecture Overview](#uvm-architecture-overview)
+   - 2.1 Testbench Top
+   - 2.2 Environment (UVM_env)
+   - 2.3 Agent (UVM_agent)
+   - 2.4 Driver, Monitor, Sequencer
+   - 2.5 Scoreboard
+   - 2.6 Functional Coverage
+3. [UVM Phases](#uvm-phases)
+   - 3.1 Build Phase
+   - 3.2 Connect Phase
+   - 3.3 Run Phase
+   - 3.4 Extract/Check/Report Phases
+4. [Transaction-Level Modeling (TLM)](#transaction-level-modeling-tlm)
+   - 4.1 TLM Ports and Exports
+   - 4.2 Analysis Ports
+   - 4.3 FIFOs and Channels
+5. [Sequences and Sequencers](#sequences-and-sequencers)
+   - 5.1 Sequence Items
+   - 5.2 Virtual Sequences
+   - 5.3 Sequence Library
+6. [Configuration and Factory](#configuration-and-factory)
+   - 6.1 UVM Configuration Database
+   - 6.2 Factory Overrides
+   - 6.3 Parameterized Classes
+7. [Functional Coverage in UVM](#functional-coverage-in-uvm)
+   - 7.1 Covergroups and Coverpoints
+   - 7.2 Cross Coverage
+   - 7.3 Coverage-Driven Verification
+
+### Part 2: Future of Formal Verification
+8. [Introduction to Formal Verification](#introduction-to-formal-verification)
+   - 8.1 What is Formal Verification?
+   - 8.2 Formal vs. Simulation-Based Verification
+   - 8.3 When to Use Formal Methods
+9. [Formal Verification Techniques](#formal-verification-techniques)
+   - 9.1 Model Checking
+   - 9.2 Equivalence Checking
+   - 9.3 Theorem Proving
+   - 9.4 Property Checking (Assertions)
+10. [SystemVerilog Assertions (SVA)](#systemverilog-assertions-sva)
+    - 10.1 Immediate Assertions
+    - 10.2 Concurrent Assertions
+    - 10.3 Property Specification Language
+11. [Emerging Trends in Formal Verification](#emerging-trends-in-formal-verification)
+    - 11.1 AI/ML-Assisted Formal Verification
+    - 11.2 Formal for Security Verification
+    - 11.3 Formal in Safety-Critical Systems (ISO 26262, DO-254)
+    - 11.4 Cloud-Based Formal Engines
+12. [Hybrid Verification Approaches](#hybrid-verification-approaches)
+    - 12.1 Formal + Simulation Integration
+    - 12.2 Portable Stimulus Standard (PSS)
+    - 12.3 Intelligent Testbench Automation
+13. [Open-Source Formal Tools](#open-source-formal-tools)
+    - 13.1 SymbiYosys
+    - 13.2 Yosys + Boolector/Z3
+    - 13.3 EBMC/CBMC
+    - 13.4 NuSMV
+14. [Commercial Formal Tools](#commercial-formal-tools)
+    - 14.1 Cadence JasperGold
+    - 14.2 Synopsys VC Formal
+    - 14.3 Siemens Questa Formal
+    - 14.4 OneSpin 360 DV
+
+### Part 3: Practical Resources
+14. [Open-Source Simulator Options](#open-source-simulator-options)
+15. [Getting Started](#getting-started)
+16. [Example Workflow](#example-workflow)
+17. [Learning Resources](#learning-resources)
+18. [Directory Structure](#directory-structure)
+19. [Contributing](#contributing)
+20. [License](#license)
+
+---
 
 ## What is UVM?
 
@@ -62,10 +158,11 @@ Several open-source simulators support UVM testbench development:
 
 ## Contents
 
-- Basic UVM examples
-- Testbench templates
+- PicoRV32 RISC-V core (design under test)
+- UVM testbench for PicoRV32
+- Formal verification properties and proofs
+- Comparison analysis and documentation
 - Verification IP (VIP) examples
-- Transaction-level modeling (TLM) examples
 - Functional coverage examples
 
 ## Getting Started
@@ -106,12 +203,22 @@ pytest test_design.py
 ```
 uvm_learning/
 ├── README.md
-├── examples/
-│   ├── basic_testbench/
-│   ├── tlm_examples/
-│   └── coverage_examples/
+├── design/
+│   └── picorv32/              # PicoRV32 RISC-V core (git submodule)
+├── test/
+│   ├── uvm/                   # UVM testbench environment
+│   │   ├── env/               # UVM environment components
+│   │   ├── agents/            # UVM agents (driver, monitor, sequencer)
+│   │   ├── sequences/         # Test sequences
+│   │   ├── tests/             # Test cases
+│   │   └── tb_top.sv          # Testbench top
+│   └── formal/                # Formal verification
+│       ├── properties/        # SVA properties and assertions
+│       ├── scripts/           # SymbiYosys scripts (.sby files)
+│       └── proofs/            # Formal proof results
 ├── docs/
-│   └── uvm_concepts.md
+│   ├── uvm_concepts.md
+│   └── formal_concepts.md
 └── tools/
     └── scripts/
 ```

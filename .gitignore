@@ -1,0 +1,50 @@
+# Nix/direnv
+.direnv/
+
+# Simulation outputs
+*.vcd
+*.fst
+*.fst.hier
+*.lxt
+*.lxt2
+obj_dir/
+*.log
+*.out
+
+# Formal verification
+*_bmc/
+*_prove/
+*_cover/
+*_live/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.egg-info/
+.eggs/
+venv/
+.venv/
+
+# Build artifacts
+*.o
+*.a
+*.so
+*.d
+build/
+
+# Editor
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+*.ucdb
+coverage/
