@@ -1,0 +1,62 @@
+# ============================================================================
+# PicoRV32 Formal Verification - SymbiYosys Configuration
+# ============================================================================
+# This is the main SymbiYosys (.sby) configuration file for running formal
+# verification on the PicoRV32 RISC-V processor.
+#
+# SymbiYosys is the open-source formal verification front-end that uses:
+# - Yosys for synthesis and design elaboration
+# - SMT solvers (Boolector, Z3, Yices) for property checking
+#
+# Usage:
+#   sby -f picorv32.sby           # Run all tasks
+#   sby -f picorv32.sby bmc       # Run only BMC task
+#   sby -f picorv32.sby prove     # Run only prove task
+#   sby -f picorv32.sby cover     # Run only cover task
+#
+# Prerequisites:
+#   - SymbiYosys (sby)
+#   - Yosys with SystemVerilog support
+#   - At least one SMT solver (boolector, z3, yices2)
+#
+# Installation (using package managers):
+#   # Ubuntu/Debian:
+#   apt install yosys symbiyosys boolector
+#   
+#   # Nix:
+#   nix-shell -p yosys symbiyosys boolector
+#
+# Reference: https://symbiyosys.readthedocs.io/
+# ============================================================================
+
+[options]
+mode bmc
+depth 50
+
+[engines]
+smtbmc boolector
+
+[script]
+# Read the PicoRV32 design
+read_verilog -sv ../../design/picorv32/picorv32.v
+
+# Read the formal testbench wrapper
+read_verilog -sv formal_top.sv
+
+# Read property files
+read_verilog -sv properties/picorv32_props.sv
+read_verilog -sv properties/picorv32_assertions.sv
+
+# Synthesize for formal verification
+prep -top formal_top
+
+[files]
+# PicoRV32 design
+../../design/picorv32/picorv32.v
+
+# Formal testbench
+formal_top.sv
+
+# Property files
+properties/picorv32_props.sv
+properties/picorv32_assertions.sv

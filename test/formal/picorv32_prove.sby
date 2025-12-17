@@ -1,0 +1,51 @@
+# ============================================================================
+# PicoRV32 Induction Proof Configuration
+# ============================================================================
+# This configuration attempts to PROVE properties using k-induction.
+# Unlike BMC, successful proofs mean properties hold for ALL cycles.
+#
+# Characteristics:
+# - Can provide complete proofs (not just bounded checking)
+# - May require strengthening invariants
+# - Can be computationally expensive
+#
+# k-Induction Process:
+# 1. Base case: Property holds in initial state
+# 2. Inductive step: If property holds for k cycles, it holds for k+1
+#
+# Usage:
+#   sby -f picorv32_prove.sby
+# ============================================================================
+
+[options]
+mode prove
+depth 30
+# k-induction depth (higher = stronger but slower)
+
+[engines]
+# Use multiple engines for robustness
+smtbmc boolector
+# smtbmc --presat z3
+# aiger avy
+
+[script]
+# Read design files
+read_verilog -sv ../../design/picorv32/picorv32.v
+read_verilog -sv formal_top.sv
+read_verilog -sv properties/picorv32_props.sv
+read_verilog -sv properties/picorv32_assertions.sv
+
+# Prepare for formal
+prep -top formal_top
+
+# Flatten for better induction
+flatten
+
+# Optimize 
+opt -full
+
+[files]
+../../design/picorv32/picorv32.v
+formal_top.sv
+properties/picorv32_props.sv
+properties/picorv32_assertions.sv

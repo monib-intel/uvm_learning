@@ -1,0 +1,50 @@
+# ============================================================================
+# PicoRV32 Bounded Model Checking (BMC) Configuration
+# ============================================================================
+# This configuration focuses on finding bugs using Bounded Model Checking.
+# BMC unrolls the design for N cycles and checks if any assertions can fail.
+#
+# Characteristics:
+# - Fast for finding shallow bugs
+# - Cannot prove absence of bugs (only that none exist within N cycles)
+# - Useful as a first-pass verification step
+#
+# Usage:
+#   sby -f picorv32_bmc.sby
+# ============================================================================
+
+[options]
+mode bmc
+depth 100
+# For deeper exploration, increase depth (but runtime grows)
+# depth 500
+
+[engines]
+# Boolector is fast for BMC
+smtbmc boolector
+# Alternative: Z3 (sometimes better for certain properties)
+# smtbmc z3
+
+[script]
+# Read design files
+read_verilog -sv ../../design/picorv32/picorv32.v
+read_verilog -sv formal_top.sv
+read_verilog -sv properties/picorv32_props.sv
+read_verilog -sv properties/picorv32_model_checking.sv
+read_verilog -sv properties/picorv32_assertions.sv
+
+# Prepare for formal
+prep -top formal_top
+
+# Optional: Flatten hierarchy for better performance
+# flatten
+
+# Optional: Optimize the design
+# opt -full
+
+[files]
+../../design/picorv32/picorv32.v
+formal_top.sv
+properties/picorv32_props.sv
+properties/picorv32_model_checking.sv
+properties/picorv32_assertions.sv

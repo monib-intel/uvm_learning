@@ -438,6 +438,474 @@ CDV methodology:
 
 ---
 
+## Introduction to Formal Verification
+
+Formal verification represents a fundamentally different approach to hardware verification compared to simulation. While simulation-based methods like UVM test specific scenarios, formal verification mathematically proves properties about the design for **all possible inputs**.
+
+### 8.1 What is Formal Verification?
+
+**Formal verification** uses mathematical techniques to prove or disprove the correctness of a hardware design with respect to a formal specification. Instead of running simulations with test vectors, formal tools explore the complete state space of the design.
+
+Key characteristics:
+- **Exhaustive**: Considers all possible input sequences and states
+- **Mathematical**: Based on rigorous mathematical proofs
+- **Complete**: Can prove absence of bugs (within scope of properties)
+- **Counterexample Generation**: When a property fails, provides a specific failing trace
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Formal Verification Flow                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   ┌──────────────┐    ┌──────────────┐    ┌──────────────┐     │
+│   │    Design    │    │  Properties  │    │ Constraints  │     │
+│   │   (RTL)      │    │    (SVA)     │    │  (Assumes)   │     │
+│   └──────┬───────┘    └──────┬───────┘    └──────┬───────┘     │
+│          │                   │                   │              │
+│          └───────────────────┴───────────────────┘              │
+│                              │                                   │
+│                              ▼                                   │
+│                    ┌──────────────────┐                         │
+│                    │   Formal Engine  │                         │
+│                    │  (SAT/SMT/BDD)   │                         │
+│                    └────────┬─────────┘                         │
+│                             │                                    │
+│              ┌──────────────┼──────────────┐                    │
+│              ▼              ▼              ▼                    │
+│        ┌─────────┐    ┌─────────┐    ┌─────────┐               │
+│        │  PROVEN │    │ FAILED  │    │ UNKNOWN │               │
+│        │ Property│    │ + CEX   │    │(timeout)│               │
+│        └─────────┘    └─────────┘    └─────────┘               │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 8.2 Formal vs. Simulation-Based Verification
+
+Understanding when to use each approach is crucial for effective verification:
+
+| Aspect | Simulation (UVM) | Formal Verification |
+|--------|------------------|---------------------|
+| **Coverage** | Tests specific scenarios | Exhaustive (all inputs) |
+| **Bug Finding** | Finds bugs in tested paths | Finds all bugs within property scope |
+| **Proof** | Cannot prove correctness | Can mathematically prove properties |
+| **Setup Time** | Longer (testbench infrastructure) | Shorter (just properties) |
+| **Runtime** | Fast per test, slow for full coverage | Can be slow/intractable for complex designs |
+| **Scalability** | Scales well with design size | Limited by state space explosion |
+| **Debug** | Full waveform visibility | Minimal counterexample traces |
+| **Realism** | Can model real-world scenarios | Abstract environment model |
+| **Corner Cases** | Often missed | Naturally discovered |
+
+#### State Space Comparison
+
+```
+Simulation Approach:
+┌─────────────────────────────────────────┐
+│           Complete State Space           │
+│  ┌─────────────────────────────────────┐│
+│  │      ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ ││
+│  │      ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ ││
+│  │  ▓▓  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ ││
+│  │      ░░░░░░░░░░░  ▓  ░░░░░░░░░░░░░ ││
+│  │      ░░░░░░░░░░░░░░░░░░░░░░░░░░  ▓ ││
+│  │  ▓   ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ ││
+│  │      ░░░░░  ▓  ░░░░░░░░░░░░░░░░░░░ ││
+│  └─────────────────────────────────────┘│
+│   ▓ = Simulated test points              │
+│   ░ = Unexplored states (potential bugs) │
+└─────────────────────────────────────────┘
+
+Formal Verification Approach:
+┌─────────────────────────────────────────┐
+│           Complete State Space           │
+│  ┌─────────────────────────────────────┐│
+│  │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ││
+│  │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ││
+│  │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ││
+│  │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ││
+│  │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ││
+│  │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ││
+│  │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ││
+│  └─────────────────────────────────────┘│
+│   ▓ = All states exhaustively verified   │
+└─────────────────────────────────────────┘
+```
+
+### 8.3 When to Use Formal Methods
+
+Formal verification is particularly effective for:
+
+#### ✅ Ideal Use Cases for Formal
+
+| Use Case | Why Formal Works Well |
+|----------|----------------------|
+| **Control Logic** | Small state machines, exhaustive exploration feasible |
+| **Protocol Compliance** | Precise property specification, no ambiguity |
+| **Arbitration Logic** | Proves fairness, no deadlock, mutual exclusion |
+| **FIFO/Queue Logic** | Proves no overflow/underflow, ordering preserved |
+| **FSM Verification** | Complete state coverage, unreachable state detection |
+| **Reset Verification** | Proves correct initialization from all states |
+| **Security Properties** | Information flow, access control verification |
+| **Deadlock Detection** | Proves system always makes progress |
+
+#### ⚠️ Challenging for Formal
+
+| Scenario | Challenge |
+|----------|-----------|
+| **Deep Pipelines** | State space explosion with pipeline depth |
+| **Large Memories** | Exponential state space with memory size |
+| **Floating Point** | Complex arithmetic, large bit widths |
+| **Full SoC** | Too many states, requires abstraction |
+| **Performance Verification** | Timing-dependent properties difficult to specify |
+
+#### Formal Verification Decision Matrix
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│              WHEN TO USE FORMAL VERIFICATION                    │
+├────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Design Complexity ──────────────────────────────────►         │
+│  │                                                              │
+│  │   ┌───────────────┐  ┌───────────────┐                      │
+│  │   │   FORMAL      │  │   HYBRID      │                      │
+│  │   │   ONLY        │  │ (Formal+Sim)  │                      │
+│  │   │               │  │               │                      │
+│  │   │ • Control     │  │ • Processor   │                      │
+│  │   │ • Arbiter     │  │   Cores       │                      │
+│  │   │ • FSM         │  │ • Complex     │                      │
+│  P   │ • Protocol    │  │   Interfaces  │                      │
+│  r   └───────────────┘  └───────────────┘                      │
+│  o   ┌───────────────┐  ┌───────────────┐                      │
+│  p   │   FORMAL      │  │  SIMULATION   │                      │
+│  e   │   PREFERRED   │  │   DOMINANT    │                      │
+│  r   │               │  │               │                      │
+│  t   │ • Bug hunting │  │ • Full SoC    │                      │
+│  y   │ • Quick check │  │ • Performance │                      │
+│      │ • Sanity      │  │ • Firmware    │                      │
+│  ▼   └───────────────┘  └───────────────┘                      │
+│                                                                 │
+└────────────────────────────────────────────────────────────────┘
+```
+
+📄 **See implementation**: [`test/formal/properties/picorv32_props.sv`](test/formal/properties/picorv32_props.sv)
+
+---
+
+## Formal Verification Techniques
+
+This section covers the main formal verification techniques and how they apply to hardware verification.
+
+### 9.1 Model Checking
+
+**Model checking** is an automated technique that systematically explores all possible states of a finite-state system to verify whether a property holds.
+
+#### How Model Checking Works
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                     MODEL CHECKING PROCESS                      │
+├────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   1. Build State Transition Graph                               │
+│   ┌─────────────────────────────────────────────────────────┐  │
+│   │                                                          │  │
+│   │      ┌───┐  a   ┌───┐  b   ┌───┐                        │  │
+│   │  ───►│ S0├─────►│ S1├─────►│ S2│                        │  │
+│   │      └───┘      └─┬─┘      └─┬─┘                        │  │
+│   │        │    c    │          │                           │  │
+│   │        └─────────┘          │ d                         │  │
+│   │                  ┌───┐◄─────┘                           │  │
+│   │                  │ S3│                                  │  │
+│   │                  └───┘                                  │  │
+│   └─────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│   2. Specify Property (e.g., "S3 is always reachable")         │
+│                                                                 │
+│   3. Exhaustively check all paths                               │
+│                                                                 │
+│   4. Result: PASS or FAIL with counterexample                   │
+│                                                                 │
+└────────────────────────────────────────────────────────────────┘
+```
+
+#### Types of Model Checking
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| **Explicit State** | Enumerates all states explicitly | Small designs, debugging |
+| **Symbolic (BDD)** | Uses Binary Decision Diagrams | Medium designs, reachability |
+| **SAT-based (BMC)** | Bounded Model Checking with SAT solvers | Bug hunting, deep traces |
+| **SMT-based** | SAT Modulo Theories for richer logic | Arithmetic properties |
+
+#### Bounded Model Checking (BMC)
+
+BMC is the most common model checking technique for hardware:
+
+```systemverilog
+// BMC unrolls the design for k cycles and checks property at each step
+// Example: Check that signal 'valid' is never high for more than 3 cycles
+
+// Cycle 0: init_state → state_0
+// Cycle 1: state_0 → state_1  (check property)
+// Cycle 2: state_1 → state_2  (check property)
+// ...
+// Cycle k: state_(k-1) → state_k (check property)
+```
+
+#### PicoRV32 Model Checking Example
+
+```systemverilog
+// Verify that PicoRV32 never enters an invalid state
+// Property: If valid instruction fetch, PC must be word-aligned
+property pc_word_aligned;
+    @(posedge clk) disable iff (!resetn)
+    mem_valid && mem_instr |-> (mem_addr[1:0] == 2'b00);
+endproperty
+
+assert property (pc_word_aligned)
+    else $error("PC not word-aligned during instruction fetch!");
+```
+
+📄 **See implementation**: [`test/formal/properties/picorv32_model_checking.sv`](test/formal/properties/picorv32_model_checking.sv)
+
+### 9.2 Equivalence Checking
+
+**Equivalence checking** proves that two designs are functionally identical. This is crucial for verifying that optimizations, synthesis, or refactoring haven't changed behavior.
+
+#### Types of Equivalence Checking
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│               EQUIVALENCE CHECKING TYPES                        │
+├────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. Combinational Equivalence                                   │
+│     ┌─────────────┐         ┌─────────────┐                    │
+│     │  Design A   │  ≡?     │  Design B   │                    │
+│     │  (RTL)      │         │  (Netlist)  │                    │
+│     └──────┬──────┘         └──────┬──────┘                    │
+│            │                       │                            │
+│            ▼                       ▼                            │
+│     Same inputs ──► Same outputs at every cycle?                │
+│                                                                 │
+│  2. Sequential Equivalence                                      │
+│     ┌─────────────┐         ┌─────────────┐                    │
+│     │  Design A   │  ≡?     │  Design B   │                    │
+│     │  (Original) │         │  (Modified) │                    │
+│     └──────┬──────┘         └──────┬──────┘                    │
+│            │                       │                            │
+│            ▼                       ▼                            │
+│     Same sequence of outputs for any input sequence?            │
+│                                                                 │
+│  3. Transaction-Level Equivalence                               │
+│     ┌─────────────┐         ┌─────────────┐                    │
+│     │  TLM Model  │  ≡?     │  RTL Design │                    │
+│     │  (High-lvl) │         │  (Low-level)│                    │
+│     └──────┬──────┘         └──────┬──────┘                    │
+│            │                       │                            │
+│            ▼                       ▼                            │
+│     Same transactions, possibly different timing?               │
+│                                                                 │
+└────────────────────────────────────────────────────────────────┘
+```
+
+#### Common Use Cases
+
+| Scenario | What to Compare |
+|----------|-----------------|
+| **RTL vs. Synthesis** | Pre-synthesis RTL vs. post-synthesis netlist |
+| **Bug Fixes** | Original design vs. patched design |
+| **Optimization** | Unoptimized vs. optimized implementation |
+| **Clock Domain** | Before vs. after CDC modifications |
+| **Power Optimization** | Before vs. after clock gating insertion |
+
+#### PicoRV32 Equivalence Example
+
+The PicoRV32 repository includes a trace comparison testbench that verifies two configurations produce identical execution traces:
+
+```systemverilog
+// From design/picorv32/scripts/smtbmc/tracecmp.v
+// Compares two PicoRV32 instances with different configurations
+// They must produce identical instruction traces
+
+always @(posedge clk) begin
+    if (resetn && trace_valid_0 && trace_valid_1) begin
+        // Both cores must produce same trace data
+        assert(trace_data_0 == trace_data_1);
+    end
+end
+```
+
+📄 **See implementation**: [`test/formal/properties/picorv32_equiv.sv`](test/formal/properties/picorv32_equiv.sv)
+
+### 9.3 Theorem Proving
+
+**Theorem proving** uses mathematical logic to prove properties about designs. Unlike model checking, it can handle infinite state spaces through abstraction and induction.
+
+#### Interactive vs. Automated Theorem Proving
+
+| Approach | Description | Tools |
+|----------|-------------|-------|
+| **Interactive** | Human guides proof construction | Coq, Isabelle, HOL |
+| **Automated** | Solver finds proof automatically | Z3, Boolector, CVC5 |
+| **Hybrid** | Automated with human hints | ACL2, PVS |
+
+#### Inductive Proofs in Hardware
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                    INDUCTIVE PROOF STRUCTURE                    │
+├────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  To prove: Property P holds in ALL reachable states             │
+│                                                                 │
+│  1. BASE CASE: P holds in initial state(s)                      │
+│     ┌─────┐                                                     │
+│     │ S₀  │  ──► P(S₀) is TRUE                                 │
+│     │init │                                                     │
+│     └─────┘                                                     │
+│                                                                 │
+│  2. INDUCTIVE STEP: If P holds in state Sₙ, it holds in Sₙ₊₁   │
+│     ┌─────┐  transition  ┌─────┐                               │
+│     │ Sₙ  │─────────────►│Sₙ₊₁│                                │
+│     │P=T  │              │P=T? │ ──► Must prove P(Sₙ₊₁)        │
+│     └─────┘              └─────┘                               │
+│                                                                 │
+│  If both hold ──► P is TRUE for all reachable states           │
+│                                                                 │
+└────────────────────────────────────────────────────────────────┘
+```
+
+#### k-Induction
+
+Standard induction may fail due to unreachable states. k-induction strengthens the inductive hypothesis:
+
+```systemverilog
+// k-induction: Assume property holds for k consecutive cycles
+// Then prove it holds in cycle k+1
+
+// Standard induction (k=1):
+// Assume: P(cycle n)
+// Prove:  P(cycle n+1)
+
+// 2-induction:
+// Assume: P(cycle n) AND P(cycle n+1)
+// Prove:  P(cycle n+2)
+
+// This eliminates unreachable states from consideration
+```
+
+### 9.4 Property Checking (Assertions)
+
+**Property checking** verifies that specific properties (expressed as assertions) hold for all possible behaviors of a design. This is the most common form of formal verification in practice.
+
+#### SystemVerilog Assertion (SVA) Basics
+
+```systemverilog
+// Immediate Assertion - checked at a specific point in time
+always @(posedge clk) begin
+    assert (count <= MAX_COUNT) else $error("Counter overflow!");
+end
+
+// Concurrent Assertion - checked continuously over time
+property req_ack_handshake;
+    @(posedge clk) disable iff (!resetn)
+    req |-> ##[1:5] ack;  // ack must follow req within 1-5 cycles
+endproperty
+
+assert property (req_ack_handshake);
+```
+
+#### Property Types for PicoRV32
+
+| Category | Property Example | Description |
+|----------|------------------|-------------|
+| **Safety** | No illegal instruction trap | Bad things never happen |
+| **Liveness** | Every memory request gets response | Good things eventually happen |
+| **Fairness** | All interrupts eventually serviced | No starvation |
+| **Functional** | ADD instruction computes correctly | Correct behavior |
+
+#### Complete SVA Property Library for Verification
+
+```systemverilog
+// ═══════════════════════════════════════════════════════════════
+// SAFETY PROPERTIES - "Bad things never happen"
+// ═══════════════════════════════════════════════════════════════
+
+// Memory address must be valid when memory access is active
+property mem_addr_valid;
+    @(posedge clk) disable iff (!resetn)
+    mem_valid |-> (mem_addr inside {[32'h0000_0000:32'hFFFF_FFFF]});
+endproperty
+
+// Write strobe must be valid during write operations
+property wstrb_valid_on_write;
+    @(posedge clk) disable iff (!resetn)
+    (mem_valid && |mem_wstrb) |-> (mem_wstrb inside {4'b0001, 4'b0011, 4'b1111});
+endproperty
+
+// ═══════════════════════════════════════════════════════════════
+// LIVENESS PROPERTIES - "Good things eventually happen"
+// ═══════════════════════════════════════════════════════════════
+
+// Memory request must eventually complete
+property mem_request_completes;
+    @(posedge clk) disable iff (!resetn)
+    mem_valid |-> s_eventually mem_ready;
+endproperty
+
+// ═══════════════════════════════════════════════════════════════
+// PROTOCOL PROPERTIES - Interface compliance
+// ═══════════════════════════════════════════════════════════════
+
+// Request must stay stable until acknowledged
+property req_stable_until_ack;
+    @(posedge clk) disable iff (!resetn)
+    (mem_valid && !mem_ready) |=> mem_valid;
+endproperty
+
+// Address stable during transaction
+property addr_stable_during_txn;
+    @(posedge clk) disable iff (!resetn)
+    (mem_valid && !mem_ready) |=> $stable(mem_addr);
+endproperty
+```
+
+#### Cover Properties for Reachability
+
+Cover properties verify that desired scenarios are reachable:
+
+```systemverilog
+// Verify that certain interesting scenarios can occur
+cover property (@(posedge clk) 
+    mem_valid && mem_instr && mem_addr == 32'h0000_0100);
+    // Can we fetch instruction from address 0x100?
+
+cover property (@(posedge clk)
+    trap && !resetn);
+    // Can the trap signal be raised?
+```
+
+#### Assumptions for Environment Modeling
+
+```systemverilog
+// Model environment behavior with assumptions
+// These constrain the formal tool's input exploration
+
+assume property (@(posedge clk)
+    mem_valid && mem_ready |=> !mem_valid [*0:3] ##1 1);
+    // Memory responses are reasonably spaced
+
+assume property (@(posedge clk) disable iff (!resetn)
+    irq == '0);
+    // No interrupts (simplify verification scope)
+```
+
+📄 **See implementation**: [`test/formal/properties/picorv32_assertions.sv`](test/formal/properties/picorv32_assertions.sv)
+
+---
+
 ## Open-Source Simulator Options
 
 Several open-source simulators support UVM testbench development:

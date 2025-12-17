@@ -1,0 +1,39 @@
+# ============================================================================
+# PicoRV32 Cover Properties Configuration
+# ============================================================================
+# This configuration checks reachability of cover properties.
+# Cover properties verify that interesting scenarios CAN occur.
+#
+# Use Cases:
+# - Verify testbench/constraints aren't over-constrained
+# - Find traces to interesting states for debugging
+# - Ensure corner cases are reachable
+#
+# Usage:
+#   sby -f picorv32_cover.sby
+# ============================================================================
+
+[options]
+mode cover
+depth 100
+# Increase depth if cover properties aren't being reached
+# depth 200
+
+[engines]
+smtbmc boolector
+
+[script]
+# Read design files
+read_verilog -sv ../../design/picorv32/picorv32.v
+read_verilog -sv formal_top.sv
+read_verilog -sv properties/picorv32_props.sv
+read_verilog -sv properties/picorv32_assertions.sv
+
+# Prepare for formal
+prep -top formal_top
+
+[files]
+../../design/picorv32/picorv32.v
+formal_top.sv
+properties/picorv32_props.sv
+properties/picorv32_assertions.sv
