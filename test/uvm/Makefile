@@ -38,21 +38,81 @@ verilator-lint:
 		$(DESIGN_FILES) \
 		--top-module picorv32
 
+# Verilator C++ simulation (design only, no UVM)
+.PHONY: verilator-sim
+verilator-sim:
+	verilator --cc --exe --build \
+		-Wno-DECLFILENAME -Wno-GENUNNAMED -Wno-UNUSEDSIGNAL -Wno-BLKSEQ \
+		-I$(DESIGN_DIR) \
+		--top-module picorv32 \
+		--trace \
+		$(DESIGN_FILES) \
+		verilator/sim_main.cpp \
+		-o Vpicorv32
+
+.PHONY: run-verilator
+run-verilator: verilator-sim
+	./obj_dir/Vpicorv32 +firmware=$(FIRMWARE)
+
 #==============================================================================
-# Icarus Verilog (limited SystemVerilog/UVM support)
+# Icarus Verilog (design-only simulation, no UVM)
+# Good for quick design checks and waveform generation
 #==============================================================================
 .PHONY: iverilog
 iverilog:
-	@echo "Note: Icarus Verilog has limited SystemVerilog/UVM support"
+	@echo "============================================"
+	@echo "Icarus Verilog - Design-only simulation"
+	@echo "(UVM not supported - use for basic testing)"
+	@echo "============================================"
 	iverilog -g2012 -Wall \
 		-I$(DESIGN_DIR) \
 		-DSIMULATION \
+		-s tb_simple \
 		$(DESIGN_FILES) \
+		iverilog/tb_simple.v \
 		-o picorv32_tb.vvp
 
 .PHONY: run-iverilog
 run-iverilog: iverilog
-	vvp picorv32_tb.vvp
+	vvp picorv32_tb.vvp +firmware=$(FIRMWARE)
+
+#==============================================================================
+# cocotb (Python-based verification - open source alternative to UVM)
+# Requires: pip install cocotb cocotb-test
+#==============================================================================
+COCOTB_DIR = cocotb
+
+.PHONY: cocotb-icarus
+cocotb-icarus:
+	cd $(COCOTB_DIR) && \
+	SIM=icarus \
+	TOPLEVEL_LANG=verilog \
+	VERILOG_SOURCES="$(abspath $(DESIGN_FILES))" \
+	TOPLEVEL=picorv32 \
+	MODULE=test_picorv32 \
+	$(MAKE) -f $(shell cocotb-config --makefiles)/Makefile.sim
+
+.PHONY: cocotb-verilator
+cocotb-verilator:
+	cd $(COCOTB_DIR) && \
+	SIM=verilator \
+	TOPLEVEL_LANG=verilog \
+	VERILOG_SOURCES="$(abspath $(DESIGN_FILES))" \
+	TOPLEVEL=picorv32 \
+	MODULE=test_picorv32 \
+	EXTRA_ARGS="--trace --trace-structs" \
+	$(MAKE) -f $(shell cocotb-config --makefiles)/Makefile.sim
+
+#==============================================================================
+# OSS CAD Suite / Yosys (formal verification with SymbiYosys)
+#==============================================================================
+.PHONY: formal
+formal:
+	cd formal && sby -f picorv32.sby
+
+.PHONY: formal-cover
+formal-cover:
+	cd formal && sby -f picorv32.sby cover
 
 #==============================================================================
 # Synopsys VCS
@@ -174,7 +234,10 @@ clean:
 	rm -rf work transcript vsim.wlf
 	rm -rf DVEfiles inter.vpd ucli.key
 	rm -rf .simvision *.trn *.dsn
-	rm -rf urgReport
+	rm -rf urgReport coverage coverage.vdb
+	rm -rf obj_dir Vpicorv32
+	rm -rf sim_build __pycache__ results.xml
+	rm -rf formal/*.sby.* formal/engine_*
 
 #==============================================================================
 # Help
@@ -184,25 +247,37 @@ help:
 	@echo "PicoRV32 UVM Testbench"
 	@echo "====================="
 	@echo ""
-	@echo "Targets:"
-	@echo "  verilator-lint  - Lint design with Verilator"
-	@echo "  vcs             - Compile with Synopsys VCS"
-	@echo "  run-vcs         - Run simulation with VCS"
-	@echo "  cov-vcs         - Generate VCS coverage report"
-	@echo "  xrun            - Run with Cadence Xcelium"
-	@echo "  cov-xrun        - Generate Xcelium coverage report"
-	@echo "  questa          - Run with Mentor QuestaSim"
-	@echo "  cov-questa      - Generate QuestaSim coverage report"
-	@echo "  waves           - View waveforms with GTKWave"
-	@echo "  clean           - Remove generated files"
+	@echo "OPEN-SOURCE SIMULATORS:"
+	@echo "  verilator-lint   - Lint design with Verilator"
+	@echo "  verilator-sim    - Build Verilator C++ simulation"
+	@echo "  run-verilator    - Run Verilator simulation"
+	@echo "  iverilog         - Compile with Icarus Verilog"
+	@echo "  run-iverilog     - Run Icarus Verilog simulation"
+	@echo "  cocotb-icarus    - Run cocotb tests with Icarus"
+	@echo "  cocotb-verilator - Run cocotb tests with Verilator"
+	@echo "  formal           - Run formal verification with SymbiYosys"
+	@echo ""
+	@echo "COMMERCIAL SIMULATORS (require license):"
+	@echo "  vcs              - Compile with Synopsys VCS"
+	@echo "  run-vcs          - Run simulation with VCS"
+	@echo "  cov-vcs          - Generate VCS coverage report"
+	@echo "  xrun             - Run with Cadence Xcelium"
+	@echo "  cov-xrun         - Generate Xcelium coverage report"
+	@echo "  questa           - Run with Mentor QuestaSim"
+	@echo "  cov-questa       - Generate QuestaSim coverage report"
+	@echo ""
+	@echo "UTILITIES:"
+	@echo "  waves            - View waveforms with GTKWave"
+	@echo "  clean            - Remove generated files"
 	@echo ""
 	@echo "Variables:"
-	@echo "  TEST=<name>     - UVM test name (default: picorv32_simple_test)"
-	@echo "  FIRMWARE=<file> - Firmware hex file (default: firmware/simple_test.hex)"
-	@echo "  VERBOSITY=<lvl> - UVM verbosity (default: UVM_MEDIUM)"
-	@echo "  SEED=<value>    - Random seed (default: random)"
+	@echo "  TEST=<name>      - UVM test name (default: picorv32_simple_test)"
+	@echo "  FIRMWARE=<file>  - Firmware hex file (default: firmware/simple_test.hex)"
+	@echo "  VERBOSITY=<lvl>  - UVM verbosity (default: UVM_MEDIUM)"
+	@echo "  SEED=<value>     - Random seed (default: random)"
 	@echo ""
 	@echo "Examples:"
+	@echo "  make run-iverilog FIRMWARE=firmware/simple_test.hex"
+	@echo "  make cocotb-verilator"
 	@echo "  make run-vcs TEST=picorv32_random_delay_test"
-	@echo "  make xrun VERBOSITY=UVM_HIGH FIRMWARE=firmware/custom.hex"
-	@echo "  make run-vcs && make cov-vcs"
+	@echo "  make formal"
