@@ -640,34 +640,11 @@ This section covers the main formal verification techniques and how they apply t
 
 #### Bounded Model Checking (BMC)
 
-BMC is the most common model checking technique for hardware:
+BMC is the most common model checking technique for hardware. It unrolls the design for k cycles and checks if any property can be violated within that bound. This is effective for finding bugs quickly, though it cannot prove properties hold for all time.
 
-```systemverilog
-// BMC unrolls the design for k cycles and checks property at each step
-// Example: Check that signal 'valid' is never high for more than 3 cycles
+📄 **See BMC properties**: [`test/formal/properties/picorv32_model_checking.sv`](test/formal/properties/picorv32_model_checking.sv)
 
-// Cycle 0: init_state → state_0
-// Cycle 1: state_0 → state_1  (check property)
-// Cycle 2: state_1 → state_2  (check property)
-// ...
-// Cycle k: state_(k-1) → state_k (check property)
-```
-
-#### PicoRV32 Model Checking Example
-
-```systemverilog
-// Verify that PicoRV32 never enters an invalid state
-// Property: If valid instruction fetch, PC must be word-aligned
-property pc_word_aligned;
-    @(posedge clk) disable iff (!resetn)
-    mem_valid && mem_instr |-> (mem_addr[1:0] == 2'b00);
-endproperty
-
-assert property (pc_word_aligned)
-    else $error("PC not word-aligned during instruction fetch!");
-```
-
-📄 **See implementation**: [`test/formal/properties/picorv32_model_checking.sv`](test/formal/properties/picorv32_model_checking.sv)
+📄 **See BMC configuration**: [`test/formal/picorv32_bmc.sby`](test/formal/picorv32_bmc.sby)
 
 ### 9.2 Equivalence Checking
 
@@ -722,22 +699,11 @@ assert property (pc_word_aligned)
 
 #### PicoRV32 Equivalence Example
 
-The PicoRV32 repository includes a trace comparison testbench that verifies two configurations produce identical execution traces:
+The PicoRV32 repository includes a trace comparison testbench that verifies two configurations produce identical execution traces. This approach instantiates two cores with different parameters and asserts their trace outputs must match.
 
-```systemverilog
-// From design/picorv32/scripts/smtbmc/tracecmp.v
-// Compares two PicoRV32 instances with different configurations
-// They must produce identical instruction traces
+📄 **See equivalence module**: [`test/formal/properties/picorv32_equiv.sv`](test/formal/properties/picorv32_equiv.sv)
 
-always @(posedge clk) begin
-    if (resetn && trace_valid_0 && trace_valid_1) begin
-        // Both cores must produce same trace data
-        assert(trace_data_0 == trace_data_1);
-    end
-end
-```
-
-📄 **See implementation**: [`test/formal/properties/picorv32_equiv.sv`](test/formal/properties/picorv32_equiv.sv)
+📄 **See original PicoRV32 example**: [`design/picorv32/scripts/smtbmc/tracecmp.v`](design/picorv32/scripts/smtbmc/tracecmp.v)
 
 ### 9.3 Theorem Proving
 
@@ -779,22 +745,9 @@ end
 
 #### k-Induction
 
-Standard induction may fail due to unreachable states. k-induction strengthens the inductive hypothesis:
+Standard induction may fail due to unreachable states. k-induction strengthens the inductive hypothesis by assuming the property holds for k consecutive cycles, then proving it holds for cycle k+1. This eliminates unreachable states from consideration and enables proofs that would otherwise fail.
 
-```systemverilog
-// k-induction: Assume property holds for k consecutive cycles
-// Then prove it holds in cycle k+1
-
-// Standard induction (k=1):
-// Assume: P(cycle n)
-// Prove:  P(cycle n+1)
-
-// 2-induction:
-// Assume: P(cycle n) AND P(cycle n+1)
-// Prove:  P(cycle n+2)
-
-// This eliminates unreachable states from consideration
-```
+📄 **See proof configuration**: [`test/formal/picorv32_prove.sby`](test/formal/picorv32_prove.sby)
 
 ### 9.4 Property Checking (Assertions)
 
@@ -802,20 +755,11 @@ Standard induction may fail due to unreachable states. k-induction strengthens t
 
 #### SystemVerilog Assertion (SVA) Basics
 
-```systemverilog
-// Immediate Assertion - checked at a specific point in time
-always @(posedge clk) begin
-    assert (count <= MAX_COUNT) else $error("Counter overflow!");
-end
+SVA provides two main assertion types:
+- **Immediate Assertions**: Checked at a specific point in simulation time
+- **Concurrent Assertions**: Checked continuously over clock cycles, supporting temporal operators
 
-// Concurrent Assertion - checked continuously over time
-property req_ack_handshake;
-    @(posedge clk) disable iff (!resetn)
-    req |-> ##[1:5] ack;  // ack must follow req within 1-5 cycles
-endproperty
-
-assert property (req_ack_handshake);
-```
+📄 **See SVA examples**: [`test/formal/properties/picorv32_assertions.sv`](test/formal/properties/picorv32_assertions.sv)
 
 #### Property Types for PicoRV32
 
@@ -826,83 +770,478 @@ assert property (req_ack_handshake);
 | **Fairness** | All interrupts eventually serviced | No starvation |
 | **Functional** | ADD instruction computes correctly | Correct behavior |
 
-#### Complete SVA Property Library for Verification
+#### SVA Property Library
 
+The formal verification property files include comprehensive examples of:
+
+- **Safety Properties**: Memory alignment, valid write strobes, no access during reset
+- **Protocol Properties**: Signal stability during transactions, handshake compliance
+- **Liveness Properties**: Memory requests complete within timeout
+- **Cover Properties**: Verify reachability of interesting scenarios (different store types, trap conditions)
+- **Assumptions**: Environment constraints for tractable verification
+
+📄 **See core properties**: [`test/formal/properties/picorv32_props.sv`](test/formal/properties/picorv32_props.sv)
+
+📄 **See comprehensive assertions**: [`test/formal/properties/picorv32_assertions.sv`](test/formal/properties/picorv32_assertions.sv)
+
+📄 **See formal testbench wrapper**: [`test/formal/formal_top.sv`](test/formal/formal_top.sv)
+
+---
+
+## SystemVerilog Assertions (SVA)
+
+SystemVerilog Assertions provide a powerful language for specifying design properties. SVA is supported by both simulation tools (for dynamic checking) and formal verification tools (for exhaustive proof).
+
+### 10.1 Immediate Assertions
+
+Immediate assertions are procedural statements checked at a specific point in simulation time. They execute like regular procedural code within `always` blocks, `initial` blocks, or tasks/functions.
+
+**Syntax:**
+```
+assert (expression) [pass_statement] [else fail_statement];
+```
+
+**Severity Levels:**
+| Keyword | Description | Simulation Behavior |
+|---------|-------------|---------------------|
+| `assert` | Check a condition | Error on failure |
+| `assume` | Constrain inputs (formal) | Treated as assert in simulation |
+| `cover` | Track reachability | Records hit count |
+| `restrict` | Formal-only constraint | Ignored in simulation |
+
+📄 **See immediate assertion examples**: [`test/formal/properties/picorv32_assertions.sv`](test/formal/properties/picorv32_assertions.sv) (Section 1)
+
+📄 **See SVA tutorial with all concepts**: [`test/formal/properties/picorv32_sva_tutorial.sv`](test/formal/properties/picorv32_sva_tutorial.sv)
+
+### 10.2 Concurrent Assertions
+
+Concurrent assertions are temporal properties checked continuously over clock cycles. They can express complex multi-cycle behaviors using sequences and properties.
+
+**Key Components:**
+
+| Component | Purpose | Example |
+|-----------|---------|---------|
+| **Sequence** | Pattern of events over time | `req ##[1:3] ack` |
+| **Property** | Temporal relationship to verify | `req \|-> ##1 ack` |
+| **Assert/Assume/Cover** | How to use the property | `assert property (...)` |
+
+**Temporal Operators:**
+
+| Operator | Meaning | Example |
+|----------|---------|---------|
+| `##n` | Delay n cycles | `a ##2 b` (a, then b after 2 cycles) |
+| `##[m:n]` | Delay m to n cycles | `a ##[1:5] b` (b within 1-5 cycles after a) |
+| `\|->` | Overlapping implication | `a \|-> b` (if a, then b same cycle) |
+| `\|=>` | Non-overlapping implication | `a \|=> b` (if a, then b next cycle) |
+| `[*n]` | Consecutive repetition | `a[*3]` (a for 3 consecutive cycles) |
+| `[*m:n]` | Repetition range | `a[*1:3]` (a for 1-3 consecutive cycles) |
+| `$rose()` | Rising edge | `$rose(signal)` |
+| `$fell()` | Falling edge | `$fell(signal)` |
+| `$stable()` | No change | `$stable(data)` |
+| `$past()` | Previous value | `$past(signal, 2)` (value 2 cycles ago) |
+
+**Disable Clause:**
 ```systemverilog
-// ═══════════════════════════════════════════════════════════════
-// SAFETY PROPERTIES - "Bad things never happen"
-// ═══════════════════════════════════════════════════════════════
-
-// Memory address must be valid when memory access is active
-property mem_addr_valid;
-    @(posedge clk) disable iff (!resetn)
-    mem_valid |-> (mem_addr inside {[32'h0000_0000:32'hFFFF_FFFF]});
-endproperty
-
-// Write strobe must be valid during write operations
-property wstrb_valid_on_write;
-    @(posedge clk) disable iff (!resetn)
-    (mem_valid && |mem_wstrb) |-> (mem_wstrb inside {4'b0001, 4'b0011, 4'b1111});
-endproperty
-
-// ═══════════════════════════════════════════════════════════════
-// LIVENESS PROPERTIES - "Good things eventually happen"
-// ═══════════════════════════════════════════════════════════════
-
-// Memory request must eventually complete
-property mem_request_completes;
-    @(posedge clk) disable iff (!resetn)
-    mem_valid |-> s_eventually mem_ready;
-endproperty
-
-// ═══════════════════════════════════════════════════════════════
-// PROTOCOL PROPERTIES - Interface compliance
-// ═══════════════════════════════════════════════════════════════
-
-// Request must stay stable until acknowledged
-property req_stable_until_ack;
-    @(posedge clk) disable iff (!resetn)
-    (mem_valid && !mem_ready) |=> mem_valid;
-endproperty
-
-// Address stable during transaction
-property addr_stable_during_txn;
-    @(posedge clk) disable iff (!resetn)
-    (mem_valid && !mem_ready) |=> $stable(mem_addr);
+property my_prop;
+    @(posedge clk) disable iff (!resetn)  // Disable during reset
+    req |-> ##[1:5] ack;
 endproperty
 ```
 
-#### Cover Properties for Reachability
+📄 **See concurrent assertion examples**: [`test/formal/properties/picorv32_props.sv`](test/formal/properties/picorv32_props.sv)
 
-Cover properties verify that desired scenarios are reachable:
+### 10.3 Property Specification Language
 
+SVA properties can be composed hierarchically for complex specifications:
+
+**Named Sequences:**
 ```systemverilog
-// Verify that certain interesting scenarios can occur
-cover property (@(posedge clk) 
-    mem_valid && mem_instr && mem_addr == 32'h0000_0100);
-    // Can we fetch instruction from address 0x100?
+sequence bus_request;
+    req ##1 !busy[*0:3] ##1 grant;
+endsequence
 
-cover property (@(posedge clk)
-    trap && !resetn);
-    // Can the trap signal be raised?
+sequence data_transfer;
+    valid ##1 data_out[*1:4] ##1 done;
+endsequence
 ```
 
-#### Assumptions for Environment Modeling
+**Sequence Operators:**
 
+| Operator | Meaning |
+|----------|---------|
+| `and` | Both sequences match (same start) |
+| `or` | Either sequence matches |
+| `intersect` | Both match with same length |
+| `within` | First sequence completes within second |
+| `throughout` | Condition holds during sequence |
+| `first_match` | Use only first match |
+
+**Local Variables in Sequences:**
 ```systemverilog
-// Model environment behavior with assumptions
-// These constrain the formal tool's input exploration
-
-assume property (@(posedge clk)
-    mem_valid && mem_ready |=> !mem_valid [*0:3] ##1 1);
-    // Memory responses are reasonably spaced
-
-assume property (@(posedge clk) disable iff (!resetn)
-    irq == '0);
-    // No interrupts (simplify verification scope)
+sequence capture_and_check;
+    int captured_val;
+    (req, captured_val = data) ##[1:5] (ack && (result == captured_val + 1));
+endsequence
 ```
 
-📄 **See implementation**: [`test/formal/properties/picorv32_assertions.sv`](test/formal/properties/picorv32_assertions.sv)
+**System Functions for Properties:**
+
+| Function | Purpose |
+|----------|---------|
+| `$onehot(expr)` | Exactly one bit set |
+| `$onehot0(expr)` | At most one bit set |
+| `$countones(expr)` | Count of set bits |
+| `$isunknown(expr)` | Contains X or Z |
+
+📄 **See property specification examples**: [`test/formal/properties/picorv32_assertions.sv`](test/formal/properties/picorv32_assertions.sv) (Section 9)
+
+---
+
+## Emerging Trends in Formal Verification
+
+Formal verification continues to evolve with new techniques and applications becoming mainstream.
+
+### 11.1 AI/ML-Assisted Formal Verification
+
+Machine learning is being applied to improve formal verification effectiveness:
+
+**Current Applications:**
+
+| Application | Description |
+|-------------|-------------|
+| **Property Mining** | ML extracts likely properties from simulation traces |
+| **Invariant Synthesis** | Automatically generate strengthening invariants |
+| **Proof Guidance** | ML suggests proof strategies to reduce runtime |
+| **Abstraction Refinement** | Learn optimal abstraction levels |
+| **Coverage Optimization** | Identify high-value properties to verify |
+
+**Emerging Research:**
+- **LLM-Generated Assertions**: Large language models suggesting SVA properties from specifications
+- **Neural Network Verification**: Formal methods applied to verify neural networks in hardware
+- **Reinforcement Learning**: Optimizing formal tool parameter tuning
+
+### 11.2 Formal for Security Verification
+
+Security verification is a rapidly growing application area:
+
+**Security Properties Verified Formally:**
+
+| Property Type | What It Verifies |
+|---------------|------------------|
+| **Information Flow** | Secret data doesn't leak to public outputs |
+| **Access Control** | Only authorized operations succeed |
+| **Non-interference** | High-security actions don't affect low-security outputs |
+| **Timing Side Channels** | Execution time independent of secrets |
+| **Spectre/Meltdown** | Microarchitectural side channels |
+
+**Security Standards Requiring Formal:**
+- Common Criteria (EAL6/7 require formal methods)
+- FIPS 140-3 (cryptographic module validation)
+- DO-178C/DO-333 (aviation formal methods supplement)
+
+### 11.3 Formal in Safety-Critical Systems
+
+Formal verification is increasingly mandated for safety-critical applications:
+
+**Automotive (ISO 26262):**
+
+| ASIL Level | Formal Verification Recommendation |
+|------------|-------------------------------------|
+| ASIL-A | Not required |
+| ASIL-B | Recommended for critical modules |
+| ASIL-C | Highly recommended |
+| ASIL-D | Strongly recommended, often required |
+
+**Aerospace (DO-254):**
+
+| DAL Level | Formal Verification |
+|-----------|---------------------|
+| Level A (Catastrophic) | Required for complex designs |
+| Level B (Hazardous) | Recommended |
+| Level C-E | Optional |
+
+**Medical Devices (IEC 62304):**
+- Class C software increasingly uses formal methods
+- FDA guidance recommends formal for high-risk devices
+
+### 11.4 Cloud-Based Formal Engines
+
+Formal verification is moving to the cloud:
+
+**Benefits:**
+- **Scalability**: Massive parallelization of proof engines
+- **Accessibility**: No expensive local infrastructure
+- **Cost Model**: Pay-per-use instead of license fees
+- **Updates**: Always latest tool versions
+
+**Providers:**
+- Major EDA vendors offer cloud-based formal
+- AWS/Azure instances optimized for formal workloads
+- Specialized formal verification cloud services
+
+---
+
+## Hybrid Verification Approaches
+
+Modern verification combines formal and simulation methods for maximum effectiveness.
+
+### 12.1 Formal + Simulation Integration
+
+**Complementary Strengths:**
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                  HYBRID VERIFICATION STRATEGY                   │
+├────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────────────┐      ┌─────────────────────┐          │
+│  │   FORMAL            │      │   SIMULATION        │          │
+│  │                     │      │                     │          │
+│  │  • Control logic    │      │  • Full system      │          │
+│  │  • Protocols        │      │  • Performance      │          │
+│  │  • Corner cases     │      │  • Firmware         │          │
+│  │  • Security         │      │  • Real scenarios   │          │
+│  └──────────┬──────────┘      └──────────┬──────────┘          │
+│             │                            │                      │
+│             └──────────┬─────────────────┘                      │
+│                        │                                        │
+│                        ▼                                        │
+│             ┌──────────────────────┐                           │
+│             │  UNIFIED COVERAGE    │                           │
+│             │  & BUG DATABASE      │                           │
+│             └──────────────────────┘                           │
+│                                                                 │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Integration Patterns:**
+
+| Pattern | Description |
+|---------|-------------|
+| **Formal Sign-off** | Use formal for specific blocks, simulation for system |
+| **Assertion-Based Verification** | Same SVA runs in both formal and simulation |
+| **Formal for X-Prop** | Catch X-propagation issues simulation misses |
+| **Connectivity Checking** | Formal verifies SoC integration |
+| **Coverage Closure** | Formal covers unreachable simulation holes |
+
+### 12.2 Portable Stimulus Standard (PSS)
+
+PSS (Accellera Standard) enables single test intent for both formal and simulation:
+
+**PSS Concept:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PORTABLE STIMULUS                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│                    ┌──────────────────┐                         │
+│                    │   PSS Model      │                         │
+│                    │  (Test Intent)   │                         │
+│                    └────────┬─────────┘                         │
+│                             │                                    │
+│           ┌─────────────────┼─────────────────┐                 │
+│           │                 │                 │                 │
+│           ▼                 ▼                 ▼                 │
+│    ┌────────────┐   ┌────────────┐   ┌────────────┐            │
+│    │   UVM      │   │  Formal    │   │  Emulator  │            │
+│    │  Tests     │   │ Constraints│   │   Tests    │            │
+│    └────────────┘   └────────────┘   └────────────┘            │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Benefits:**
+- Write once, run anywhere
+- Consistent test intent across platforms
+- Automatic test generation
+- Formal extraction of scenarios
+
+### 12.3 Intelligent Testbench Automation
+
+**Automated Property Generation:**
+- Extract properties from simulation coverage
+- Mine assertions from waveform analysis
+- Generate formal constraints from UVM sequences
+
+**Coverage Convergence:**
+- Formal identifies hard-to-reach coverage
+- Automated seed/constraint generation
+- Directed test synthesis from formal counterexamples
+
+📄 **See formal/simulation property sharing**: [`test/formal/properties/picorv32_assertions.sv`](test/formal/properties/picorv32_assertions.sv) (assertions work in both)
+
+---
+
+## Open-Source Formal Tools
+
+Open-source formal verification has become viable for production use.
+
+### 13.1 SymbiYosys
+
+**SymbiYosys (sby)** is the leading open-source formal verification front-end.
+
+**Features:**
+- Integrates Yosys synthesis with formal solvers
+- Supports BMC, k-induction, and cover modes
+- Multiple solver backends
+- VCD trace generation for counterexamples
+
+**Workflow:**
+```
+RTL + SVA ──► Yosys ──► SMT-LIB2 ──► Solver ──► Result
+                            │
+                            ├── Boolector
+                            ├── Z3
+                            ├── Yices2
+                            └── CVC5
+```
+
+📄 **See SymbiYosys configurations**: [`test/formal/picorv32_bmc.sby`](test/formal/picorv32_bmc.sby), [`test/formal/picorv32_prove.sby`](test/formal/picorv32_prove.sby)
+
+📄 **See formal Makefile**: [`test/formal/Makefile`](test/formal/Makefile)
+
+### 13.2 Yosys + Solvers
+
+**Yosys** provides the synthesis and formal preparation:
+
+| Component | Purpose |
+|-----------|---------|
+| **Yosys** | Verilog/SV synthesis, design elaboration |
+| **Boolector** | Bitvector SMT solver (fast for hardware) |
+| **Z3** | General-purpose SMT solver |
+| **Yices2** | Efficient SMT solver |
+| **ABC** | And-Inverter Graph based model checking |
+
+**Direct SMT-BMC:**
+```bash
+yosys -p "read_verilog design.v; prep -top top; write_smt2 design.smt2"
+yosys-smtbmc --dump-vcd trace.vcd design.smt2
+```
+
+### 13.3 EBMC/CBMC
+
+**EBMC** (Embedded Bounded Model Checker) is specialized for hardware:
+
+| Tool | Target | Strengths |
+|------|--------|-----------|
+| **EBMC** | Verilog/VHDL | Hardware-focused, netlist support |
+| **CBMC** | C/C++ | Software model checking |
+
+**Use Cases:**
+- Equivalence checking between C and RTL
+- Property checking with C-style constraints
+- Hardware/software co-verification
+
+### 13.4 NuSMV
+
+**NuSMV** is a symbolic model checker for finite-state systems:
+
+**Features:**
+- BDD-based and SAT-based model checking
+- LTL and CTL property specification
+- Interactive and batch modes
+
+**Best For:**
+- Protocol verification
+- Control logic FSMs
+- Academic/educational use
+
+**Property Specification (CTL/LTL):**
+```
+-- CTL: On all paths, eventually request leads to acknowledge
+AG (req -> AF ack)
+
+-- LTL: Globally, request implies eventually acknowledge
+G (req -> F ack)
+```
+
+---
+
+## Commercial Formal Tools
+
+Commercial tools offer advanced features, capacity, and support for production verification.
+
+### 14.1 Cadence JasperGold
+
+**JasperGold** is the industry-leading formal verification platform.
+
+**Key Apps:**
+
+| App | Purpose |
+|-----|---------|
+| **Superlint** | Deep structural analysis and lint |
+| **Formal Property Verification** | Property proof engine |
+| **Security Path Verification** | Information flow analysis |
+| **Coverage Unreachability** | Identify unreachable coverage |
+| **Connectivity Verification** | SoC integration checking |
+| **X-Propagation** | X-pessimism/optimism analysis |
+| **Low Power Verification** | UPF/power intent checking |
+
+**Strengths:**
+- Industry-leading capacity
+- Comprehensive app portfolio
+- Strong security verification
+- Excellent debug environment
+
+### 14.2 Synopsys VC Formal
+
+**VC Formal** provides comprehensive formal verification:
+
+**Key Apps:**
+
+| App | Purpose |
+|-----|---------|
+| **Formal Property Verification** | Core proof engine |
+| **Formal Coverage Analyzer** | Coverage closure |
+| **Formal Testbench Analyzer** | Assertion quality |
+| **VC Formal DPV** | Datapath verification |
+| **VC Formal SEQ** | Sequential equivalence |
+
+**Strengths:**
+- Tight integration with VCS simulation
+- Advanced datapath verification
+- Strong CDC/RDC formal
+- Unified debug with Verdi
+
+### 14.3 Siemens Questa Formal
+
+**Questa Formal** (formerly Mentor OneSpin):
+
+**Key Features:**
+
+| Feature | Description |
+|---------|-------------|
+| **Questa PropCheck** | Property verification |
+| **Questa AutoCheck** | Automatic property generation |
+| **Questa Inspect** | Design exploration |
+| **Questa CoverCheck** | Formal coverage analysis |
+| **CDC Verification** | Clock domain crossing |
+
+**Strengths:**
+- Strong CDC/RDC capabilities
+- Good automation features
+- Unified Questa verification flow
+- OneSpin 360 DV heritage
+
+### 14.4 Tool Comparison
+
+| Capability | JasperGold | VC Formal | Questa Formal |
+|------------|------------|-----------|---------------|
+| **Property Proof** | ★★★★★ | ★★★★★ | ★★★★☆ |
+| **Security** | ★★★★★ | ★★★★☆ | ★★★☆☆ |
+| **CDC/RDC** | ★★★★☆ | ★★★★☆ | ★★★★★ |
+| **Coverage** | ★★★★★ | ★★★★★ | ★★★★☆ |
+| **Debug** | ★★★★★ | ★★★★★ | ★★★★☆ |
+| **Automation** | ★★★★☆ | ★★★★☆ | ★★★★★ |
+| **Capacity** | ★★★★★ | ★★★★★ | ★★★★☆ |
+
+**Selection Criteria:**
+- **Existing Flow**: Use vendor matching your simulation flow
+- **Specific Apps**: Choose based on key applications needed
+- **Support**: Consider local support quality
+- **Cost**: Evaluate licensing models (perpetual vs. subscription)
+
+📄 **See formal verification README**: [`test/formal/README.md`](test/formal/README.md)
 
 ---
 
