@@ -1,0 +1,33 @@
+// Simple test firmware for PicoRV32 UVM testbench
+// This is a minimal hex file that performs basic operations
+// Uses standard $readmemh format with addresses and data
+
+@00000000  // Reset vector
+00000013   // NOP (addi x0, x0, 0)
+00100093   // addi x1, x0, 1      ; x1 = 1
+00200113   // addi x2, x0, 2      ; x2 = 2
+00308193   // addi x3, x1, 3      ; x3 = x1 + 3 = 4
+002081B3   // add  x3, x1, x2     ; x3 = x1 + x2 = 3
+40208233   // sub  x4, x1, x2     ; x4 = x1 - x2 = -1
+0020F2B3   // and  x5, x1, x2     ; x5 = x1 & x2 = 0
+0020E333   // or   x6, x1, x2     ; x6 = x1 | x2 = 3
+0020C3B3   // xor  x7, x1, x2     ; x7 = x1 ^ x2 = 3
+
+// Store and load test
+10000437   // lui  x8, 0x10000    ; x8 = 0x10000000 (RAM base)
+00142023   // sw   x1, 0(x8)      ; mem[0x10000000] = 1
+00042483   // lw   x9, 0(x8)      ; x9 = mem[0x10000000] = 1
+
+// Loop test
+00A00513   // addi x10, x0, 10    ; x10 = 10 (loop counter)
+FFF50513   // addi x10, x10, -1   ; x10 = x10 - 1
+FE051EE3   // bne  x10, x0, -4    ; if x10 != 0, branch back
+
+// Branch test
+00000593   // addi x11, x0, 0     ; x11 = 0
+00100613   // addi x12, x0, 1     ; x12 = 1
+00B60663   // beq  x12, x11, +12  ; if x12 == x11, skip (not taken)
+00158593   // addi x11, x11, 1    ; x11 = x11 + 1
+
+// End: trigger trap
+00100073   // EBREAK              ; Trigger trap to end simulation
